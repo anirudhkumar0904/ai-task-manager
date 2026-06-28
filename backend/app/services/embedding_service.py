@@ -75,15 +75,50 @@ class EmbeddingService:
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     def _split_text(self, text: str) -> list[str]:
-        words = text.split()
+        """Split on blank-line paragraph boundaries first, then greedily pack
+        paragraphs into ~CHUNK_SIZE-word chunks so a chunk never straddles
+        unrelated sections (e.g. Sick Leave vs Expense Reimbursement)."""
+        # Normalise Windows (\r\n) and old-Mac (\r) line endings to \n first,
+        # otherwise "\n\n" never matches a Windows-saved file's "\r\n\r\n"
+        # and the whole document falls through as a single giant paragraph.
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+        paragraphs = [p.strip() for p in normalized.split("\n\n") if p.strip()]
+        if not paragraphs:
+            return []
+
         chunks = []
-        start = 0
-        while start < len(words):
-            end = min(start + CHUNK_SIZE, len(words))
-            chunks.append(" ".join(words[start:end]))
-            if end == len(words):
-                break
-            start += CHUNK_SIZE - CHUNK_OVERLAP
+        current_words: list[str] = []
+
+        for para in paragraphs:
+            para_words = para.split()
+
+            # A single paragraph longer than CHUNK_SIZE gets its own
+            # sliding-window split, same overlap logic as before, but
+            # scoped to just that one paragraph instead of the whole doc.
+            if len(para_words) > CHUNK_SIZE:
+                if current_words:
+                    chunks.append(" ".join(current_words))
+                    current_words = []
+                start = 0
+                while start < len(para_words):
+                    end = min(start + CHUNK_SIZE, len(para_words))
+                    chunks.append(" ".join(para_words[start:end]))
+                    if end == len(para_words):
+                        break
+                    start += CHUNK_SIZE - CHUNK_OVERLAP
+                continue
+
+            # Would adding this paragraph blow past the chunk size?
+            if current_words and len(current_words) + len(para_words) > CHUNK_SIZE:
+                chunks.append(" ".join(current_words))
+                # carry a small overlap from the end of the previous chunk
+                current_words = current_words[-CHUNK_OVERLAP:] if CHUNK_OVERLAP else []
+
+            current_words.extend(para_words)
+
+        if current_words:
+            chunks.append(" ".join(current_words))
+
         return chunks
 
     def _embed(self, texts: list[str]) -> np.ndarray:

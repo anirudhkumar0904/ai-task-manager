@@ -20,6 +20,7 @@ class SearchResponse(BaseModel):
     query: str
     results: list[SearchResult]
     total_results: int
+    ai_answer: Optional[str] = None
     search_time_ms: float
 
 

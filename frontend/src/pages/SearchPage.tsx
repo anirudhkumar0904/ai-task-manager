@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Zap, FileText, Clock } from 'lucide-react'
+import { Search, Zap, FileText, Clock, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/services/api'
 import type { SearchResponse } from '@/types'
@@ -9,11 +9,13 @@ export default function SearchPage() {
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState<string[]>([])
+  const [showSources, setShowSources] = useState(false)
 
   const doSearch = async (q?: string) => {
     const searchQuery = (q ?? query).trim()
     if (!searchQuery) return
     setLoading(true)
+    setShowSources(false)
     try {
       const { data } = await api.post('/search', { query: searchQuery, top_k: 5 })
       setResult(data)
@@ -42,7 +44,7 @@ export default function SearchPage() {
           <Zap className="w-7 h-7 text-primary-600" />
           AI Semantic Search
         </h1>
-        <p className="text-slate-500 mt-1">Search across all indexed documents using natural language — powered by sentence embeddings + FAISS</p>
+        <p className="text-slate-500 mt-1">Ask a question in plain language — answers are grounded in your indexed documents</p>
       </div>
 
       {/* Search bar */}
@@ -55,7 +57,7 @@ export default function SearchPage() {
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKey}
               className="input pl-12 py-3 text-base"
-              placeholder="Ask anything — e.g. 'What is the refund policy?'"
+              placeholder="Ask anything — e.g. 'How many sick leave days do I get?'"
             />
           </div>
           <button onClick={() => doSearch()} disabled={loading || !query.trim()} className="btn-primary px-6 flex items-center gap-2">
@@ -78,13 +80,41 @@ export default function SearchPage() {
         )}
       </div>
 
+      {/* Loading skeleton for the answer card */}
+      {loading && (
+        <div className="card p-6 mb-6 border-l-4 border-primary-400 animate-pulse">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-primary-400" />
+            <div className="h-3 w-24 bg-slate-200 rounded" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 bg-slate-200 rounded w-full" />
+            <div className="h-3 bg-slate-200 rounded w-5/6" />
+          </div>
+        </div>
+      )}
+
       {/* Results */}
-      {result && (
+      {result && !loading && (
         <div>
+          {/* AI-generated direct answer, chatbot-style */}
+          {result.ai_answer && (
+            <div className="card p-6 mb-6 border-l-4 border-primary-500 bg-gradient-to-br from-primary-50/60 to-white">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 rounded-full bg-primary-600 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="text-xs font-semibold text-primary-700 uppercase tracking-wide">AI Answer</span>
+              </div>
+              <p className="text-slate-800 text-base leading-relaxed">{result.ai_answer}</p>
+            </div>
+          )}
+
+          {/* Header row */}
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-sm font-semibold text-slate-700">
-                {result.total_results} result{result.total_results !== 1 ? 's' : ''} for "{result.query}"
+                {result.total_results} source{result.total_results !== 1 ? 's' : ''} for "{result.query}"
               </p>
               <p className="text-xs text-slate-400 mt-0.5">{result.search_time_ms}ms · Semantic similarity search</p>
             </div>
@@ -98,31 +128,46 @@ export default function SearchPage() {
               <p className="text-sm mt-1">Try different keywords or upload more documents</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {result.results.map((r) => (
-                <div key={r.rank} className="card p-5 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center">
-                        {r.rank}
-                      </span>
-                      <div className="flex items-center gap-1.5 text-slate-600">
-                        <FileText className="w-4 h-4 text-blue-500" />
-                        <span className="font-semibold text-sm">{r.document_title}</span>
+            <>
+              {/* If we have an AI answer, sources are collapsed by default to keep focus on the answer */}
+              {result.ai_answer ? (
+                <button
+                  onClick={() => setShowSources(s => !s)}
+                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3 transition-colors"
+                >
+                  {showSources ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  {showSources ? 'Hide' : 'Show'} source passages
+                </button>
+              ) : null}
+
+              {(showSources || !result.ai_answer) && (
+                <div className="space-y-4">
+                  {result.results.map((r) => (
+                    <div key={r.rank} className="card p-5 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center">
+                            {r.rank}
+                          </span>
+                          <div className="flex items-center gap-1.5 text-slate-600">
+                            <FileText className="w-4 h-4 text-blue-500" />
+                            <span className="font-semibold text-sm">{r.document_title}</span>
+                          </div>
+                        </div>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scoreColor(r.score)}`}>
+                          {(r.score * 100).toFixed(1)}% match
+                        </span>
+                      </div>
+
+                      {/* Highlighted chunk */}
+                      <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-primary-400">
+                        <p className="text-sm text-slate-700 leading-relaxed">{r.chunk_text}</p>
                       </div>
                     </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scoreColor(r.score)}`}>
-                      {(r.score * 100).toFixed(1)}% match
-                    </span>
-                  </div>
-
-                  {/* Highlighted chunk */}
-                  <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-primary-400">
-                    <p className="text-sm text-slate-700 leading-relaxed">{r.chunk_text}</p>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -132,7 +177,7 @@ export default function SearchPage() {
         <div className="text-center py-20 text-slate-300">
           <Search className="w-16 h-16 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium text-slate-400">Start by entering a question</p>
-          <p className="text-sm mt-1 text-slate-300">The AI will find the most relevant document sections</p>
+          <p className="text-sm mt-1 text-slate-300">The AI will find the most relevant document sections and answer directly</p>
         </div>
       )}
     </div>

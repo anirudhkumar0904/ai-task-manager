@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,14 @@ from app.core.config import settings
 from app.api.v1 import api_router
 from app.db.session import SessionLocal
 from app.db.init_db import init_db
+
+# Without this, app-level logger.warning()/info() calls can be silently
+# dropped depending on how Uvicorn configures the root logger — explicit
+# basicConfig() guarantees they always reach stdout / `docker compose logs`.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 @asynccontextmanager

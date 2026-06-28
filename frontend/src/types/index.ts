@@ -59,6 +59,7 @@ export interface SearchResponse {
   results: SearchResult[]
   total_results: number
   search_time_ms: number
+  ai_answer?: string | null
 }
 
 export interface AnalyticsData {

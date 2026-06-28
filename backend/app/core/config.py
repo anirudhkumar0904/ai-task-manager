@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     VECTOR_DB_PATH: str = "./vector_store"
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
 
+    # Groq (optional answer-synthesis layer on top of retrieval)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_ENABLED: bool = False
+
     class Config:
         env_file = ".env"
         case_sensitive = True
